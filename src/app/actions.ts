@@ -1,154 +1,165 @@
 'use server';
 
-import { PrismaClient } from '@prisma/client';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-const prisma = new PrismaClient();
+export type Obligation = { id: string; name: string; amount: number; dueDate: Date | string; isPaid: boolean; };
+export type Transaction = { id: string; amount: number; note: string; date: Date | string; };
+export type ProtectedSaving = { id: string; name: string; amount: number; };
 
-async function getSessionHouseholdId() {
+export type HouseholdData = {
+  id: string;
+  availableCash: number;
+  nextIncomeDate: string | null;
+  safetyBuffer: number;
+  obligations: Obligation[];
+  protectedSavings: ProtectedSaving[];
+  transactions: Transaction[];
+};
+
+const COOKIE_NAME = 'family_money_data';
+
+async function getHouseholdData(): Promise<HouseholdData> {
   const cookieStore = await cookies();
-  return cookieStore.get('householdId')?.value;
+  const data = cookieStore.get(COOKIE_NAME)?.value;
+  if (!data) {
+    return {
+      id: Math.random().toString(36).substring(7),
+      availableCash: 0,
+      nextIncomeDate: null,
+      safetyBuffer: 0,
+      obligations: [],
+      protectedSavings: [],
+      transactions: [],
+    };
+  }
+  try {
+    return JSON.parse(Buffer.from(data, 'base64').toString('utf-8'));
+  } catch (e) {
+    return {
+      id: Math.random().toString(36).substring(7),
+      availableCash: 0,
+      nextIncomeDate: null,
+      safetyBuffer: 0,
+      obligations: [],
+      protectedSavings: [],
+      transactions: [],
+    };
+  }
 }
 
-export async function createHousehold() {
-  const household = await prisma.household.create({
-    data: {}
-  });
-  
+async function saveHouseholdData(data: HouseholdData) {
   const cookieStore = await cookies();
-  cookieStore.set('householdId', household.id, {
+  const encoded = Buffer.from(JSON.stringify(data)).toString('base64');
+  cookieStore.set(COOKIE_NAME, encoded, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     maxAge: 60 * 60 * 24 * 365, // 1 year
   });
-  
-  return household.id;
+}
+
+export async function createHousehold() {
+  const data = await getHouseholdData();
+  await saveHouseholdData(data);
+  return data.id;
 }
 
 export async function getHousehold() {
-  const id = await getSessionHouseholdId();
-  if (!id) return null;
-  
-  return prisma.household.findUnique({
-    where: { id },
-    include: {
-      obligations: true,
-      protectedSavings: true,
-      transactions: true,
-    }
-  });
+  const cookieStore = await cookies();
+  const data = cookieStore.get(COOKIE_NAME)?.value;
+  if (!data) return null;
+  return await getHouseholdData();
 }
 
 export async function getOrCreateHousehold() {
-  let id = await getSessionHouseholdId();
-  if (!id) {
-    id = await createHousehold();
-  }
-  return id;
+  const data = await getHouseholdData();
+  await saveHouseholdData(data);
+  return data.id;
 }
 
 export async function updateAvailableCash(amount: number) {
-  const id = await getOrCreateHousehold();
-  await prisma.household.update({
-    where: { id },
-    data: { availableCash: amount }
-  });
+  const data = await getHouseholdData();
+  data.availableCash = amount;
+  await saveHouseholdData(data);
 }
 
 export async function updateNextIncomeDate(date: Date) {
-  const id = await getOrCreateHousehold();
-  await prisma.household.update({
-    where: { id },
-    data: { nextIncomeDate: date }
-  });
+  const data = await getHouseholdData();
+  data.nextIncomeDate = date.toISOString();
+  await saveHouseholdData(data);
 }
 
 export async function addObligation(name: string, amount: number, dueDate: Date) {
-  const id = await getOrCreateHousehold();
-  await prisma.obligation.create({
-    data: {
-      householdId: id,
-      name,
-      amount,
-      dueDate,
-    }
+  const data = await getHouseholdData();
+  data.obligations.push({
+    id: Math.random().toString(36).substring(7),
+    name,
+    amount,
+    dueDate: dueDate.toISOString(),
+    isPaid: false,
   });
+  await saveHouseholdData(data);
 }
 
 export async function addProtectedSaving(name: string, amount: number) {
-  const id = await getOrCreateHousehold();
-  await prisma.protectedSaving.create({
-    data: {
-      householdId: id,
-      name,
-      amount,
-    }
+  const data = await getHouseholdData();
+  data.protectedSavings.push({
+    id: Math.random().toString(36).substring(7),
+    name,
+    amount,
   });
+  await saveHouseholdData(data);
 }
 
 export async function updateSafetyBuffer(amount: number) {
-  const id = await getOrCreateHousehold();
-  await prisma.household.update({
-    where: { id },
-    data: { safetyBuffer: amount }
-  });
+  const data = await getHouseholdData();
+  data.safetyBuffer = amount;
+  await saveHouseholdData(data);
 }
 
 export async function addTransaction(amount: number, note: string) {
-  const id = await getSessionHouseholdId();
-  if (!id) throw new Error("No household found");
-  
-  await prisma.transaction.create({
-    data: {
-      householdId: id,
-      amount,
-      note,
-    }
+  const data = await getHouseholdData();
+  data.transactions.push({
+    id: Math.random().toString(36).substring(7),
+    amount,
+    note,
+    date: new Date().toISOString(),
   });
+  await saveHouseholdData(data);
 }
 
 export async function markObligationPaid(obligationId: string, isPaid: boolean) {
-  const id = await getSessionHouseholdId();
-  if (!id) throw new Error("No household found");
-  
-  await prisma.obligation.update({
-    where: { id: obligationId, householdId: id },
-    data: { isPaid }
-  });
+  const data = await getHouseholdData();
+  const ob = data.obligations.find(o => o.id === obligationId);
+  if (ob) {
+    ob.isPaid = isPaid;
+    await saveHouseholdData(data);
+  }
 }
 
 export async function seedDemoData() {
-  const id = await createHousehold();
-  
   const today = new Date();
   const nextIncome = new Date(today);
   nextIncome.setDate(today.getDate() + 12);
   
-  await prisma.household.update({
-    where: { id },
-    data: {
-      availableCash: 25000000,
-      nextIncomeDate: nextIncome,
-      safetyBuffer: 2000000,
-    }
-  });
+  const demoData: HouseholdData = {
+    id: 'demo-123',
+    availableCash: 25000000,
+    nextIncomeDate: nextIncome.toISOString(),
+    safetyBuffer: 2000000,
+    transactions: [],
+    obligations: [
+      { id: '1', name: 'Tiền nhà', amount: 7000000, dueDate: today.toISOString(), isPaid: false },
+      { id: '2', name: 'Học phí', amount: 2500000, dueDate: today.toISOString(), isPaid: false },
+      { id: '3', name: 'Điện nước', amount: 850000, dueDate: today.toISOString(), isPaid: false },
+      { id: '4', name: 'Internet', amount: 300000, dueDate: today.toISOString(), isPaid: false },
+    ],
+    protectedSavings: [
+      { id: '5', name: 'Tiết kiệm', amount: 4000000 },
+    ],
+  };
   
-  await Promise.all([
-    prisma.obligation.create({ data: { householdId: id, name: 'Tiền nhà', amount: 7000000, dueDate: today } }),
-    prisma.obligation.create({ data: { householdId: id, name: 'Học phí', amount: 2500000, dueDate: today } }),
-    prisma.obligation.create({ data: { householdId: id, name: 'Điện nước', amount: 850000, dueDate: today } }),
-    prisma.obligation.create({ data: { householdId: id, name: 'Internet', amount: 300000, dueDate: today } }),
-  ]);
-  
-  await prisma.protectedSaving.create({
-    data: {
-      householdId: id,
-      name: 'Tiết kiệm',
-      amount: 4000000,
-    }
-  });
-  
+  await saveHouseholdData(demoData);
   redirect('/dashboard');
 }
