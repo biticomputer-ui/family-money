@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { formatCurrency, parseCurrency } from '@/lib/format';
 import { calculateSafeToSpend, calculateDaysUntilIncome } from '@/lib/safeToSpend';
 import { addTransaction } from '../actions';
-import { CheckCircle2, Plus, CreditCard, ShoppingBag, WalletCards, ShieldAlert, Check, Calendar } from 'lucide-react';
+import { CheckCircle2, Plus, CreditCard, ShoppingBag, WalletCards, ShieldAlert, Check, Calendar, Sparkles } from 'lucide-react';
 
 type HouseholdData = {
   availableCash: number;
@@ -29,6 +29,9 @@ export default function DashboardClient({ household }: { household: HouseholdDat
   const [simulateNote, setSimulateNote] = useState('');
   
   const [loading, setLoading] = useState(false);
+
+  const [aiInput, setAiInput] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
 
   // New Obligation State
   const [isObligationModalOpen, setIsObligationModalOpen] = useState(false);
@@ -162,8 +165,63 @@ export default function DashboardClient({ household }: { household: HouseholdDat
             </div>
           </div>
 
+          {/* AI ASSISTANT CARD */}
+          <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-3xl p-1 shadow-sm border border-indigo-100">
+            <div className="bg-white rounded-[22px] p-4 flex flex-col gap-3 relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-3 opacity-10 text-indigo-500">
+                <Sparkles size={60} />
+              </div>
+              
+              <div className="flex items-center gap-2 text-indigo-600 font-bold text-sm relative z-10">
+                <Sparkles size={16} />
+                <span>Trợ lý AI</span>
+              </div>
+              
+              <form 
+                className="relative z-10"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!aiInput.trim()) return;
+                  setAiLoading(true);
+                  try {
+                    const m = await import('../actions');
+                    const msg = await m.processExpenseWithAI(aiInput);
+                    alert(msg || "Đã lưu thành công!");
+                    setAiInput('');
+                    router.refresh();
+                  } catch (error: any) {
+                    alert("Lỗi: " + error.message);
+                  }
+                  setAiLoading(false);
+                }}
+              >
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="VD: Mua trà sữa 50k, đóng tiền nhà 5 củ..."
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
+                    value={aiInput}
+                    onChange={(e) => setAiInput(e.target.value)}
+                    disabled={aiLoading}
+                  />
+                  <button 
+                    type="submit"
+                    disabled={aiLoading || !aiInput.trim()}
+                    className="bg-indigo-600 text-white rounded-xl px-4 py-3 font-semibold shadow-md shadow-indigo-200 hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center shrink-0"
+                  >
+                    {aiLoading ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    ) : (
+                      "Gửi"
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
           {/* ACTIONS */}
-          <div className="grid grid-cols-2 gap-3 mt-8">
+          <div className="grid grid-cols-2 gap-3 mt-6">
             <button 
               onClick={() => setIsSpendModalOpen(true)}
               className="flex flex-col items-center justify-center gap-3 py-6 bg-blue-600 text-white rounded-3xl shadow-lg shadow-blue-200 hover:bg-blue-700 hover:scale-[1.02] transition-all"

@@ -163,3 +163,80 @@ export async function seedDemoData() {
   await saveHouseholdData(demoData);
   redirect('/dashboard');
 }
+
+export async function processExpenseWithAI(userInput: string) {
+  const data = await getHouseholdData();
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("Missing GEMINI_API_KEY environment variable");
+
+  const unpaidObligations = data.obligations.filter(o => !o.isPaid).map(o => ({
+    id: o.id,
+    name: o.name,
+    amount: o.amount
+  }));
+
+  const systemPrompt = `You are an AI financial assistant for a Vietnamese household.
+The user will input what they spent today in natural language.
+You need to parse this into a JSON object.
+
+Current pending obligations the user needs to pay:
+${JSON.stringify(unpaidObligations)}
+
+Rules:
+1. Extract all standard expenses into "transactions" (array of {amount: number, note: string}).
+2. If the user mentions paying an obligation that matches or is similar to one of the pending obligations, extract its ID into "paidObligationIds" (array of string IDs). Only include the ID if they explicitly state they paid it. Do NOT put obligation payments in the "transactions" array.
+3. Keep notes very short in Vietnamese (e.g. "Tiền điện thoại", "Siêu thị").
+4. Return ONLY valid JSON format without markdown ticks. Schema:
+{
+  "transactions": [{"amount": 100000, "note": "Cà phê"}],
+  "paidObligationIds": ["1"]
+}`;
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey.trim()}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: systemPrompt + "\n\nUser Input: " + userInput }] }]
+    })
+  });
+
+  const resJson = await response.json();
+  const text = resJson?.candidates?.[0]?.content?.parts?.[0]?.text;
+  
+  if (!text) {
+    throw new Error("Không thể xử lý yêu cầu. Vui lòng thử lại.");
+  }
+
+  // Remove markdown code blocks if present
+  const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+  const parsed = JSON.parse(cleanJson);
+
+  let successMessage = "";
+
+  // Process transactions
+  if (parsed.transactions && Array.isArray(parsed.transactions)) {
+    for (const t of parsed.transactions) {
+      data.transactions.push({
+        id: Math.random().toString(36).substring(7),
+        amount: t.amount,
+        note: t.note,
+        date: new Date().toISOString(),
+      });
+      successMessage += `Ghi nhận chi tiêu: ${t.note} (${t.amount.toLocaleString('vi-VN')}đ). `;
+    }
+  }
+
+  // Process obligations
+  if (parsed.paidObligationIds && Array.isArray(parsed.paidObligationIds)) {
+    for (const obId of parsed.paidObligationIds) {
+      const ob = data.obligations.find(o => o.id === obId);
+      if (ob) {
+        ob.isPaid = true;
+        successMessage += `Đã gạch nợ khoản: ${ob.name}. `;
+      }
+    }
+  }
+
+  await saveHouseholdData(data);
+  return successMessage.trim();
+}
