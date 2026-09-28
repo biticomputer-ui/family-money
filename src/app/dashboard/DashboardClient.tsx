@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { formatCurrency, parseCurrency } from '@/lib/format';
 import { calculateSafeToSpend, calculateDaysUntilIncome } from '@/lib/safeToSpend';
 import { addTransaction } from '../actions';
-import { CheckCircle2, Plus, CreditCard, ShoppingBag, WalletCards, ShieldAlert, Check } from 'lucide-react';
+import { CheckCircle2, Plus, CreditCard, ShoppingBag, WalletCards, ShieldAlert, Check, Calendar } from 'lucide-react';
 
 type HouseholdData = {
   availableCash: number;
@@ -29,6 +29,12 @@ export default function DashboardClient({ household }: { household: HouseholdDat
   const [simulateNote, setSimulateNote] = useState('');
   
   const [loading, setLoading] = useState(false);
+
+  // New Obligation State
+  const [isObligationModalOpen, setIsObligationModalOpen] = useState(false);
+  const [newObName, setNewObName] = useState('');
+  const [newObAmount, setNewObAmount] = useState(0);
+  const [newObDate, setNewObDate] = useState('');
 
   const safeToSpend = calculateSafeToSpend({
     availableCash: household.availableCash,
@@ -63,6 +69,18 @@ export default function DashboardClient({ household }: { household: HouseholdDat
     setIsSimulateModalOpen(false);
     setSimulateAmount(0);
     setSimulateNote('');
+    setLoading(false);
+    router.refresh();
+  };
+
+  const handleAddObligation = async () => {
+    if (newObAmount <= 0 || !newObName || !newObDate) return;
+    setLoading(true);
+    await import('../actions').then(m => m.addObligation(newObName, newObAmount, new Date(newObDate)));
+    setIsObligationModalOpen(false);
+    setNewObName('');
+    setNewObAmount(0);
+    setNewObDate('');
     setLoading(false);
     router.refresh();
   };
@@ -169,41 +187,79 @@ export default function DashboardClient({ household }: { household: HouseholdDat
           {/* UPCOMING OBLIGATIONS */}
           <div className="mt-10">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold text-slate-900">Sắp phải trả</h2>
-              <span className="text-xs font-semibold bg-slate-100 text-slate-500 px-2 py-1 rounded-full">{nextObligations.length} khoản</span>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-slate-900">Sắp phải trả</h2>
+                <span className="text-xs font-semibold bg-slate-100 text-slate-500 px-2 py-1 rounded-full">{nextObligations.length} khoản</span>
+              </div>
+              <button 
+                onClick={() => setIsObligationModalOpen(true)}
+                className="text-sm font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-full flex items-center gap-1"
+              >
+                <Plus size={16} /> Thêm khoản
+              </button>
             </div>
             
             {nextObligations.length > 0 ? (
               <div className="space-y-3">
-                {nextObligations.map((ob: any) => (
-                  <div key={ob.id} className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center">
-                        <CreditCard size={18} />
+                {nextObligations.map((ob: any) => {
+                  const dueDate = new Date(ob.dueDate);
+                  
+                  // Format for Google Calendar (YYYYMMDDTHHmmssZ)
+                  const formatCalDate = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
+                  const startDate = formatCalDate(dueDate);
+                  
+                  // Next day for all-day event
+                  const endDateObj = new Date(dueDate);
+                  endDateObj.setDate(endDateObj.getDate() + 1);
+                  const endDate = formatCalDate(endDateObj);
+                  
+                  const googleCalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Thanh to%C3%A1n%3A+${encodeURIComponent(ob.name)}&dates=${startDate}/${endDate}&details=Nh%E1%BA%AFc+nh%E1%BB%A1+thanh+to%C3%A1n+kho%E1%BA%A3n+${formatCurrency(ob.amount)}+t%E1%BB%AB+Family+Money.`;
+
+                  return (
+                    <div key={ob.id} className="flex flex-col bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow gap-3">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center">
+                            <CreditCard size={18} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-800">{ob.name}</p>
+                            <p className="text-xs font-medium text-slate-400 mt-0.5">
+                              Hạn: {new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(dueDate)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <span className="font-bold text-slate-800">{formatCurrency(ob.amount)}</span>
+                          <button 
+                            onClick={async () => {
+                              setLoading(true);
+                              await import('../actions').then(m => m.markObligationPaid(ob.id, true));
+                              setLoading(false);
+                              router.refresh();
+                            }}
+                            className="text-xs font-semibold flex items-center gap-1 text-slate-400 hover:text-green-600 bg-slate-50 hover:bg-green-50 px-3 py-1.5 rounded-full transition-colors"
+                          >
+                            <Check size={14} /> Xong
+                          </button>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-bold text-slate-800">{ob.name}</p>
-                        <p className="text-xs font-medium text-slate-400 mt-0.5">
-                          Hạn: {new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(new Date(ob.dueDate))}
-                        </p>
+                      
+                      {/* ADD TO CALENDAR ACTION */}
+                      <div className="border-t border-slate-50 pt-3 mt-1">
+                        <a 
+                          href={googleCalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-medium text-blue-600 flex items-center gap-1.5 hover:text-blue-700 w-fit"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg>
+                          Đồng bộ Lịch / Đặt nhắc nhở
+                        </a>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span className="font-bold text-slate-800">{formatCurrency(ob.amount)}</span>
-                      <button 
-                        onClick={async () => {
-                          setLoading(true);
-                          await import('../actions').then(m => m.markObligationPaid(ob.id, true));
-                          setLoading(false);
-                          router.refresh();
-                        }}
-                        className="text-xs font-semibold flex items-center gap-1 text-slate-400 hover:text-green-600 bg-slate-50 hover:bg-green-50 px-3 py-1.5 rounded-full transition-colors"
-                      >
-                        <Check size={14} /> Xong
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 text-center text-slate-500 text-sm">
@@ -361,6 +417,66 @@ export default function DashboardClient({ household }: { household: HouseholdDat
                     Ghi sổ
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ADD OBLIGATION MODAL */}
+        {isObligationModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
+            <div className="bg-white w-full max-w-md rounded-t-[32px] sm:rounded-3xl p-6 pb-10 shadow-2xl animate-in slide-in-from-bottom-full duration-300">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-bold text-slate-900">Dự kiến khoản phải chi</h3>
+                <button onClick={() => setIsObligationModalOpen(false)} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">&times;</button>
+              </div>
+              
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Tên khoản tiền</label>
+                  <input
+                    type="text"
+                    placeholder="Ví dụ: Đóng học phí, Tiền nhà..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    value={newObName}
+                    onChange={(e) => setNewObName(e.target.value)}
+                  />
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Số tiền</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="0 ₫"
+                    className="w-full text-4xl font-extrabold bg-transparent py-1 outline-none text-slate-900 placeholder:text-slate-300"
+                    value={newObAmount ? formatCurrency(newObAmount).replace(' ₫', '') : ''}
+                    onChange={(e) => setNewObAmount(parseCurrency(e.target.value))}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Ngày dự kiến thanh toán</label>
+                  <input
+                    type="date"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    value={newObDate}
+                    onChange={(e) => setNewObDate(e.target.value)}
+                  />
+                </div>
+
+                <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex gap-3 items-start">
+                  <div className="mt-1"><Calendar size={20} className="text-blue-600" /></div>
+                  <p className="text-sm text-blue-800 font-medium">Sau khi thêm, bạn có thể tạo Lịch nhắc nhở (Google Calendar/Apple) để không bị quên!</p>
+                </div>
+
+                <button 
+                  onClick={handleAddObligation}
+                  disabled={loading || newObAmount <= 0 || !newObName || !newObDate}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl text-lg font-bold shadow-lg shadow-slate-300 disabled:opacity-50 disabled:shadow-none hover:bg-black transition-all mt-4"
+                >
+                  {loading ? 'Đang thêm...' : 'Khóa khoản tiền này lại'}
+                </button>
               </div>
             </div>
           </div>
