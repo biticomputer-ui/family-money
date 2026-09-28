@@ -7,32 +7,6 @@ function generateIV(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(12));
 }
 
-/**
- * Helper to create a 256-bit AES-GCM CryptoKey from a given password string
- */
-async function deriveKey(password: string): Promise<CryptoKey> {
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(password),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveBits', 'deriveKey']
-  );
-
-  // We use a fixed salt for simplicity in this MVP, but in a real app, salt should be random and passed along.
-  // Since the user is just sharing a link, we embed a "key" inside the link or just use a fixed passphrase for the link generation
-  // Actually, to make the link self-contained AND encrypted, the key MUST be in the link (the fragment).
-  // Wait, if the key is in the link, anyone with the link can decrypt it, so it's not truly secure against someone who *has* the link.
-  // But it hides the data from intermediaries/server logs if it's in the hash. 
-  // Let's generate a random encryption key per snapshot, and put it in the hash: #payload=iv:ciphertext:key
-  
-  return crypto.subtle.generateKey(
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt', 'decrypt']
-  );
-}
 
 /**
  * Encodes ArrayBuffer to Base64URL string

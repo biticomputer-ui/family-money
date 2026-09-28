@@ -109,7 +109,7 @@ export async function getLegacyData() {
   try {
     const data = JSON.parse(legacyCookie.value);
     return data;
-  } catch (e) {
+  } catch {
     return null;
   }
 }

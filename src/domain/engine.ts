@@ -1,4 +1,4 @@
-import { HouseholdData, Transaction, Obligation } from './models';
+import { HouseholdData, Transaction } from './models';
 
 /**
  * Tính tổng các khoản phải trả đang pending trước ngày nhận lương

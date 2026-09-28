@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, CheckCircle2, ShieldCheck, Zap, LineChart } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ShieldCheck, LineChart } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { householdRepository } from '../repository/household';
 import { HouseholdData } from '../domain/models';

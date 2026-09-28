@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency, parseCurrency } from '@/lib/format';
 import { householdRepository } from '../../repository/household';
-import { HouseholdData, Transaction } from '../../domain/models';
+import { HouseholdData } from '../../domain/models';
 import { 
   calculateRawSafeToSpend, 
   calculateDailyAllowance, 
@@ -16,7 +16,7 @@ import {
   calculateOutstandingObligations
 } from '../../domain/engine';
 import { 
-  CheckCircle2, Plus, CreditCard, ShoppingBag, 
+  Plus, ShoppingBag, 
   Check, Calendar, 
   Sparkles, Users, ChevronDown, ChevronUp, AlertCircle, Mic
 } from 'lucide-react';
@@ -147,6 +147,7 @@ export default function DashboardClient() {
     
     let newData = { ...household };
     for (const actUntyped of aiConfirmActions) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const act = actUntyped as any; // Cast internally since Zod already validated it
       if (act.type === 'expense' || act.type === 'income') {
         newData = applyTransaction(newData, {
@@ -171,6 +172,7 @@ export default function DashboardClient() {
       return;
     }
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
     recognition.lang = 'vi-VN';
@@ -180,11 +182,13 @@ export default function DashboardClient() {
       setIsListening(true);
     };
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
       setAiInput(prev => prev ? prev + ' ' + transcript : transcript);
     };
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onerror = (event: any) => {
       console.error("Speech error", event.error);
       setIsListening(false);
