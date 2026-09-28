@@ -115,6 +115,35 @@ export default function DashboardClient({ household }: { household: HouseholdDat
             <span className="font-medium">Các khoản quan trọng đang được bảo vệ</span>
           </div>
 
+          {/* LOGIC BREAKDOWN CARD */}
+          <div className="mt-4 bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+              <span className="bg-slate-100 p-1.5 rounded-lg">💡</span> Cách tính toán số tiền này
+            </h3>
+            <div className="space-y-2 text-sm text-slate-600 font-medium">
+              <div className="flex justify-between">
+                <span>Quỹ ban đầu</span>
+                <span className="text-slate-900">{formatCurrency(household.availableCash)}</span>
+              </div>
+              <div className="flex justify-between text-red-500">
+                <span>Trừ: Đã tiêu linh hoạt</span>
+                <span>-{formatCurrency(household.transactions.reduce((acc: number, t: any) => acc + t.amount, 0))}</span>
+              </div>
+              <div className="flex justify-between text-orange-500">
+                <span>Trừ: Sắp phải trả</span>
+                <span>-{formatCurrency(household.obligations.filter((o:any)=>!o.isPaid).reduce((acc: number, o: any) => acc + o.amount, 0))}</span>
+              </div>
+              <div className="flex justify-between text-teal-600">
+                <span>Trừ: Đã khóa (Tiết kiệm/Dự phòng)</span>
+                <span>-{formatCurrency(household.safetyBuffer + household.protectedSavings.reduce((acc: number, s: any) => acc + s.amount, 0))}</span>
+              </div>
+              <div className="border-t border-slate-100 pt-2 mt-2 flex justify-between font-bold text-slate-900">
+                <span>= Còn được tiêu</span>
+                <span>{formatCurrency(safeToSpend)}</span>
+              </div>
+            </div>
+          </div>
+
           {/* ACTIONS */}
           <div className="grid grid-cols-2 gap-3 mt-8">
             <button 
