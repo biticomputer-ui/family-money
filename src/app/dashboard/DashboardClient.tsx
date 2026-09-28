@@ -18,7 +18,7 @@ import {
 import { 
   CheckCircle2, Plus, CreditCard, ShoppingBag, 
   Check, Calendar, 
-  Sparkles, Users, ChevronDown, ChevronUp, AlertCircle
+  Sparkles, Users, ChevronDown, ChevronUp, AlertCircle, Mic
 } from 'lucide-react';
 
 export default function DashboardClient() {
@@ -44,6 +44,7 @@ export default function DashboardClient() {
   const [aiInput, setAiInput] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiConfirmActions, setAiConfirmActions] = useState<any[] | null>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [isListening, setIsListening] = useState(false);
 
   // UI state
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -164,6 +165,38 @@ export default function DashboardClient() {
     setAiInput('');
   };
 
+  const startListening = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert("Trình duyệt của bạn không hỗ trợ nhận diện giọng nói. Vui lòng dùng Chrome hoặc Safari mới nhất.");
+      return;
+    }
+    
+    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'vi-VN';
+    recognition.interimResults = false;
+    
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+    
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setAiInput(prev => prev ? prev + ' ' + transcript : transcript);
+    };
+    
+    recognition.onerror = (event: any) => {
+      console.error("Speech error", event.error);
+      setIsListening(false);
+    };
+    
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+    
+    recognition.start();
+  };
+
   if (!isLoaded || !household) return null;
 
   const rawSafeToSpend = calculateRawSafeToSpend(household);
@@ -255,14 +288,24 @@ export default function DashboardClient() {
               <Sparkles size={16} className="text-indigo-500" /> Hôm nay nhà mình đã chi gì?
             </h2>
             <form onSubmit={handleAIRequest} className="flex gap-2">
-              <input
-                type="text"
-                placeholder="VD: ăn trưa 80k, đổ xăng 100k"
-                className="flex-1 bg-white border border-slate-200 rounded-2xl px-4 py-4 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm"
-                value={aiInput}
-                onChange={(e) => setAiInput(e.target.value)}
-                disabled={aiLoading}
-              />
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  placeholder="VD: ăn trưa 80k, đổ xăng 100k"
+                  className="w-full bg-white border border-slate-200 rounded-2xl pl-4 pr-12 py-4 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm"
+                  value={aiInput}
+                  onChange={(e) => setAiInput(e.target.value)}
+                  disabled={aiLoading}
+                />
+                <button 
+                  type="button"
+                  onClick={startListening}
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full transition-colors ${isListening ? 'bg-red-100 text-red-600 animate-pulse' : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-50'}`}
+                  title="Nhập bằng giọng nói"
+                >
+                  <Mic size={20} />
+                </button>
+              </div>
               <button 
                 type="submit"
                 disabled={aiLoading || !aiInput.trim()}
