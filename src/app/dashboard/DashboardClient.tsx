@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { formatCurrency, parseCurrency } from '@/lib/format';
 import { calculateSafeToSpend, calculateDaysUntilIncome } from '@/lib/safeToSpend';
 import { addTransaction } from '../actions';
-import { CheckCircle2, Plus, CreditCard, ShoppingBag, WalletCards, ShieldAlert, Check, Calendar, Sparkles } from 'lucide-react';
+import { CheckCircle2, Plus, CreditCard, ShoppingBag, WalletCards, ShieldAlert, Check, Calendar, Sparkles, Users } from 'lucide-react';
 
 type HouseholdData = {
   availableCash: number;
@@ -122,13 +122,36 @@ export default function DashboardClient({ household }: { household: HouseholdDat
             )}
 
             {safeToSpend >= 0 && (
-              <div className="mt-2 text-center bg-slate-50 rounded-2xl py-3 px-4 inline-block">
-                <p className="text-slate-600 font-medium text-sm">Còn <span className="text-slate-900 font-bold">{daysUntilIncome} ngày</span> tới kỳ lương</p>
-                {daysUntilIncome > 0 && (
-                  <p className="text-blue-600 font-bold mt-1">≈ {formatCurrency(dailyAmount)} <span className="text-xs text-blue-400 font-medium">/ ngày</span></p>
-                )}
+              <div className="mt-2 flex flex-col items-center gap-3">
+                <div className="text-center bg-slate-50 rounded-2xl py-3 px-4 inline-block">
+                  <p className="text-slate-600 font-medium text-sm">Còn <span className="text-slate-900 font-bold">{daysUntilIncome} ngày</span> tới kỳ lương</p>
+                  {daysUntilIncome > 0 && (
+                    <p className="text-blue-600 font-bold mt-1">≈ {formatCurrency(dailyAmount)} <span className="text-xs text-blue-400 font-medium">/ ngày</span></p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 bg-orange-50 text-orange-600 px-3 py-1 rounded-full text-xs font-bold border border-orange-100">
+                  🔥 Phong độ chi tiêu: Rất kỷ luật!
+                </div>
               </div>
             )}
+          </div>
+
+          {/* SHARE CARD */}
+          <div className="mt-4 flex gap-2">
+            <button 
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(household))));
+                  const url = `${window.location.origin}/join?data=${encoded}`;
+                  navigator.clipboard.writeText(url);
+                  alert('Đã copy link mời! Hãy gửi link này cho vợ/chồng của bạn qua Zalo để đồng bộ dữ liệu nhé.');
+                }
+              }}
+              className="flex-1 flex items-center justify-center gap-2 text-sm text-slate-700 bg-white py-3 px-5 rounded-2xl border border-slate-200 shadow-sm hover:bg-slate-50 transition-colors font-bold"
+            >
+              <Users size={18} className="text-blue-500" />
+              Mời Vợ/Chồng tham gia
+            </button>
           </div>
 
           <div className="mt-6 flex items-center justify-center gap-2 text-sm text-green-700 bg-green-50 py-3 px-5 rounded-2xl border border-green-100 shadow-sm">

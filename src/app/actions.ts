@@ -72,6 +72,20 @@ export async function getHousehold() {
   return await getHouseholdData();
 }
 
+export async function importHouseholdData(encodedData: string) {
+  try {
+    const jsonString = Buffer.from(encodedData, 'base64').toString('utf-8');
+    const parsed = JSON.parse(jsonString);
+    if (parsed && parsed.id) {
+      await saveHouseholdData(parsed);
+      return true;
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
 export async function getOrCreateHousehold() {
   const data = await getHouseholdData();
   await saveHouseholdData(data);
