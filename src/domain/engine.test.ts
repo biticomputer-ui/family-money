@@ -54,7 +54,7 @@ describe('Safe-to-Spend Engine', () => {
   });
 
   it('allows negative state', () => {
-    let data = createMockData();
+    const data = createMockData();
     data.balance = 5000000;
     data.obligations[0].amount = 6000000;
     data.lockedSavings = 0;
@@ -65,7 +65,7 @@ describe('Safe-to-Spend Engine', () => {
   });
 
   it('simulator does not mutate state', () => {
-    let data = createMockData();
+    const data = createMockData();
     const result = simulatePurchase(data, 1500000);
     
     expect(result.rawSafeToSpend).toBe(4000000);
@@ -73,17 +73,41 @@ describe('Safe-to-Spend Engine', () => {
     expect(data.balance).toBe(10000000); // Unchanged
   });
 
-  it('undo restores previous state', () => {
+  it('undo restores previous state including paid obligations', () => {
     let data = createMockData();
-    expect(calculateRawSafeToSpend(data)).toBe(4000000);
-    
-    data = applyTransaction(data, { type: 'expense', amount: 500000, description: 'Ăn tối' });
-    expect(calculateRawSafeToSpend(data)).toBe(3500000);
+    data = payObligation(data, 'ob1');
+    expect(data.obligations[0].status).toBe('paid');
     
     const txId = data.transactions[data.transactions.length - 1].id;
     data = undoTransaction(data, txId);
     
-    expect(calculateRawSafeToSpend(data)).toBe(4000000);
     expect(data.balance).toBe(10000000);
+    expect(data.obligations[0].status).toBe('pending');
+    expect(data.obligations[0].paidTransactionId).toBeUndefined();
+  });
+});
+
+import { calculateRemainingSpendingDays } from './engine';
+
+describe('Spending Days Calculation', () => {
+  it('calculates 7 days when today is 28th and payday is 5th next month', () => {
+    const today = new Date('2026-09-28T12:00:00.000Z');
+    const payday = '2026-10-05T00:00:00.000Z'; // local time will be October 5
+    expect(calculateRemainingSpendingDays(payday, today)).toBe(7);
+  });
+
+  it('returns 0 if payday is today', () => {
+    const today = new Date('2026-10-05T12:00:00.000Z');
+    expect(calculateRemainingSpendingDays('2026-10-05T08:00:00.000Z', today)).toBe(0);
+  });
+
+  it('handles leap year correctly (Feb 28 to Mar 1)', () => {
+    const today = new Date('2024-02-28T10:00:00.000Z');
+    expect(calculateRemainingSpendingDays('2024-03-01T00:00:00.000Z', today)).toBe(2);
+  });
+
+  it('handles year boundary (Dec 31 to Jan 2)', () => {
+    const today = new Date('2026-12-31T20:00:00.000Z');
+    expect(calculateRemainingSpendingDays('2027-01-02T00:00:00.000Z', today)).toBe(2);
   });
 });

@@ -14,27 +14,34 @@ function JoinContent() {
   const [snapshotData, setSnapshotData] = useState<HouseholdData | null>(null);
 
   useEffect(() => {
-    try {
-      const hash = window.location.hash;
-      if (!hash || !hash.startsWith('#payload=')) {
-        setStatus('error');
-        return;
+    let isMounted = true;
+    setTimeout(async () => {
+      try {
+        const hash = window.location.hash;
+        if (!hash || !hash.startsWith('#payload=')) {
+          if (isMounted) setStatus('error');
+          return;
+        }
+        
+        const encoded = hash.replace('#payload=', '');
+        const { decryptSnapshot } = await import('../../repository/snapshot');
+        
+        const parsed = await decryptSnapshot(encoded);
+        
+        if (parsed && parsed.schemaVersion) {
+          if (isMounted) {
+            setSnapshotData(parsed);
+            setStatus('preview');
+          }
+        } else {
+          if (isMounted) setStatus('error');
+        }
+      } catch (e) {
+        console.error(e);
+        if (isMounted) setStatus('error');
       }
-      
-      const encoded = hash.replace('#payload=', '');
-      const jsonString = decodeURIComponent(escape(atob(encoded)));
-      const parsed = JSON.parse(jsonString);
-      
-      if (parsed && parsed.schemaVersion) {
-        setSnapshotData(parsed);
-        setStatus('preview');
-      } else {
-        setStatus('error');
-      }
-    } catch (e) {
-      console.error(e);
-      setStatus('error');
-    }
+    }, 0);
+    return () => { isMounted = false; };
   }, []);
 
   const handleImport = () => {

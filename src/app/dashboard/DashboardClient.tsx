@@ -17,7 +17,7 @@ import {
 } from '../../domain/engine';
 import { 
   CheckCircle2, Plus, CreditCard, ShoppingBag, 
-  WalletCards, ShieldAlert, Check, Calendar, 
+  Check, Calendar, 
   Sparkles, Users, ChevronDown, ChevronUp, AlertCircle
 } from 'lucide-react';
 
@@ -43,19 +43,45 @@ export default function DashboardClient() {
   // AI Assistant state
   const [aiInput, setAiInput] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiConfirmActions, setAiConfirmActions] = useState<any[] | null>(null);
+  const [aiConfirmActions, setAiConfirmActions] = useState<any[] | null>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   // UI state
   const [showBreakdown, setShowBreakdown] = useState(false);
   
   useEffect(() => {
-    const data = householdRepository.get();
-    if (!data) {
-      router.push('/onboarding');
-    } else {
-      setHousehold(data);
+    let isMounted = true;
+    async function loadData() {
+      let data = householdRepository.get();
+      if (!data) {
+        // Try legacy migration
+        try {
+          const { getLegacyData, clearLegacyCookie } = await import('../actions');
+          const legacyRaw = await getLegacyData();
+          if (legacyRaw) {
+            const migrated = householdRepository.migrateLegacy(legacyRaw);
+            householdRepository.save(migrated);
+            data = migrated;
+            await clearLegacyCookie();
+          }
+        } catch (e) {
+          console.error("Migration failed", e);
+        }
+      }
+
+      if (isMounted) {
+        if (!data) {
+          router.push('/onboarding');
+        } else {
+          setHousehold(data);
+        }
+        setIsLoaded(true);
+      }
     }
-    setIsLoaded(true);
+    
+    // Defer execution slightly to avoid synchronous setState warning
+    setTimeout(loadData, 0);
+    
+    return () => { isMounted = false; };
   }, [router]);
 
   const updateHousehold = (newData: HouseholdData) => {
@@ -109,8 +135,8 @@ export default function DashboardClient() {
       const m = await import('../actions');
       const result = await m.parseExpenseWithAI(aiInput, pendingObs);
       setAiConfirmActions(result.actions);
-    } catch (error: any) {
-      alert("Lỗi: " + error.message);
+    } catch (error: unknown) {
+      alert("Lỗi: " + (error instanceof Error ? error.message : String(error)));
     }
     setAiLoading(false);
   };
@@ -119,7 +145,8 @@ export default function DashboardClient() {
     if (!household || !aiConfirmActions) return;
     
     let newData = { ...household };
-    for (const act of aiConfirmActions) {
+    for (const actUntyped of aiConfirmActions) {
+      const act = actUntyped as any; // Cast internally since Zod already validated it
       if (act.type === 'expense' || act.type === 'income') {
         newData = applyTransaction(newData, {
           type: act.type,
@@ -374,11 +401,12 @@ export default function DashboardClient() {
           {/* 6. SHARE SNAPSHOT */}
           <div className="pt-4 border-t border-slate-100">
             <button 
-              onClick={() => {
-                const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(household))));
-                const url = `${window.location.origin}/join#payload=${encoded}`;
+              onClick={async () => {
+                const { createEncryptedSnapshot } = await import('../../repository/snapshot');
+                const payload = await createEncryptedSnapshot(household);
+                const url = `${window.location.origin}/join#payload=${payload}`;
                 navigator.clipboard.writeText(url);
-                alert('Đã copy link! Gửi cho vợ/chồng để xem tình hình hiện tại nhé.');
+                alert('Đã copy link mã hóa! Gửi cho vợ/chồng để xem tình hình hiện tại nhé.');
               }}
               className="w-full py-4 bg-slate-100 text-slate-700 font-bold rounded-2xl border border-slate-200 flex items-center justify-center gap-2 hover:bg-slate-200"
             >

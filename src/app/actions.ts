@@ -98,3 +98,23 @@ Extract the obligationId. The amount is optional if it matches exactly, but incl
   const parsed = JSON.parse(text);
   return AiActionSchema.parse(parsed);
 }
+
+import { cookies } from 'next/headers';
+
+export async function getLegacyData() {
+  const cookieStore = await cookies();
+  const legacyCookie = cookieStore.get('family_money_data');
+  if (!legacyCookie || !legacyCookie.value) return null;
+  
+  try {
+    const data = JSON.parse(legacyCookie.value);
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function clearLegacyCookie() {
+  const cookieStore = await cookies();
+  cookieStore.delete('family_money_data');
+}

@@ -20,14 +20,21 @@ export function calculateRawSafeToSpend(data: HouseholdData): number {
 /**
  * Tính số ngày còn lại đến kỳ lương
  */
-export function calculateRemainingSpendingDays(nextPayday: string): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const payDate = new Date(nextPayday);
-  payDate.setHours(0, 0, 0, 0);
+export function calculateRemainingSpendingDays(nextPayday: string, currentDayForTest?: Date): number {
+  const today = currentDayForTest || new Date();
   
-  const diffTime = payDate.getTime() - today.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  // Format as YYYY-MM-DD in local time to strip off time components and timezone shifts
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  
+  const payDateObj = new Date(nextPayday);
+  const payDateStr = `${payDateObj.getFullYear()}-${String(payDateObj.getMonth() + 1).padStart(2, '0')}-${String(payDateObj.getDate()).padStart(2, '0')}`;
+  
+  const cleanToday = new Date(`${todayStr}T00:00:00.000`);
+  const cleanPaydate = new Date(`${payDateStr}T00:00:00.000`);
+  
+  const diffTime = cleanPaydate.getTime() - cleanToday.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  
   return Math.max(0, diffDays); // If payday is today or passed, 0 days left
 }
 

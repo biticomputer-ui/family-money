@@ -11,7 +11,10 @@ export const householdRepository = {
     
     try {
       const data = JSON.parse(raw);
-      return migrateHouseholdData(data);
+      if (data && data.schemaVersion === CURRENT_SCHEMA_VERSION) {
+        return data as HouseholdData;
+      }
+      return null;
     } catch (e) {
       console.error('Failed to parse household data', e);
       return null;
@@ -26,49 +29,53 @@ export const householdRepository = {
   clear(): void {
     if (typeof window === 'undefined') return;
     localStorage.removeItem(STORAGE_KEY);
-  }
-};
+  },
 
-/**
- * Migration logic from cookie or older schema to CURRENT_SCHEMA_VERSION
- */
-export function migrateHouseholdData(data: any): HouseholdData {
-  // If it's already the current schema, just return it
-  if (data && data.schemaVersion === CURRENT_SCHEMA_VERSION) {
-    return data as HouseholdData;
-  }
-  
-  // Legacy cookie schema (V0) migration
-  // Old schema had: id, availableCash, nextIncomeDate, safetyBuffer, transactions, obligations, protectedSavings
-  if (data && data.availableCash !== undefined) {
+  migrateLegacy(dataRaw: unknown): HouseholdData {
+    if (!dataRaw || typeof dataRaw !== 'object') throw new Error("Invalid legacy data");
+    
+    // Legacy cookie schema (V0) migration
+    const data = dataRaw as Record<string, unknown>;
+    
+    const lockedSavings = data.protectedSavings && Array.isArray(data.protectedSavings)
+      ? data.protectedSavings.reduce((sum: number, sRaw: unknown) => {
+          const s = sRaw as Record<string, unknown>;
+          return sum + (Number(s.amount) || 0);
+        }, 0)
+      : 0;
+
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
-      householdId: data.id || crypto.randomUUID(),
+      householdId: (data.id as string) || crypto.randomUUID(),
       currency: 'VND',
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Ho_Chi_Minh',
-      balance: data.availableCash,
-      nextPayday: data.nextIncomeDate || new Date().toISOString(),
-      lockedSavings: data.protectedSavings?.reduce((sum: number, s: any) => sum + s.amount, 0) || 0,
-      emergencyReserve: data.safetyBuffer || 0,
-      obligations: (data.obligations || []).map((o: any) => ({
-        id: o.id || crypto.randomUUID(),
-        title: o.name,
-        amount: o.amount,
-        dueDate: o.dueDate,
-        status: o.isPaid ? 'paid' : 'pending',
-        createdAt: new Date().toISOString()
-      })),
-      transactions: (data.transactions || []).map((t: any) => ({
-        id: t.id || crypto.randomUUID(),
-        type: 'expense',
-        amount: t.amount,
-        description: t.note,
-        createdAt: t.date || new Date().toISOString()
-      })),
+      balance: Math.round(Number(data.availableCash) || 0),
+      nextPayday: (data.nextIncomeDate as string) || new Date().toISOString(),
+      lockedSavings: Math.round(lockedSavings),
+      emergencyReserve: Math.round(Number(data.safetyBuffer) || 0),
+      obligations: (Array.isArray(data.obligations) ? data.obligations : []).map((oRaw: unknown) => {
+        const o = oRaw as Record<string, unknown>;
+        return {
+          id: (o.id as string) || crypto.randomUUID(),
+          title: (o.name as string) || 'Khoản phải trả',
+          amount: Math.round(Number(o.amount) || 0),
+          dueDate: (o.dueDate as string) || new Date().toISOString(),
+          status: o.isPaid ? 'paid' : 'pending',
+          createdAt: new Date().toISOString()
+        };
+      }),
+      transactions: (Array.isArray(data.transactions) ? data.transactions : []).map((tRaw: unknown) => {
+        const t = tRaw as Record<string, unknown>;
+        return {
+          id: (t.id as string) || crypto.randomUUID(),
+          type: 'expense',
+          amount: Math.round(Number(t.amount) || 0),
+          description: (t.note as string) || 'Chi tiêu',
+          createdAt: (t.date as string) || new Date().toISOString()
+        };
+      }),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
   }
-  
-  throw new Error("Unsupported schema for migration");
-}
+};
